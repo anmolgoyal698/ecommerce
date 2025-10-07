@@ -1,9 +1,10 @@
 import { Card } from "react-bootstrap";
 import type { IProduct } from "../models/Product";
+import { Link } from "react-router-dom";
 
 const Product = ({ product }: { product: IProduct }) => {
   return (
-    <a className="product-link" href={`/product/${product._id}`}>
+    <Link className="product-link" to={`/products/${product._id}`}>
       <Card className="p-3 my-3">
         <Card.Img variant="top" src={product.image} />
         <Card.Body>
@@ -11,7 +12,7 @@ const Product = ({ product }: { product: IProduct }) => {
           <Card.Text as="h4">${product.price}</Card.Text>
         </Card.Body>
       </Card>
-    </a>
+    </Link>
   );
 };
 
