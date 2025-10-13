@@ -23,7 +23,6 @@ const loginUser = asyncHandler(async (req, res) => {
     res.status(401);
     throw new Error("Invalid email or password");
   }
-  res.send("Login user");
 });
 
 // @desc    Register user
@@ -91,34 +90,63 @@ const getUserProfile = asyncHandler(async (req, res) => {
   }
 });
 
-// @desc    Get user's profile
+// @desc    Update user's profile
 // @route   PUT /api/users/profile
 // @acess.  Private
+
+// @desc    Update user's profile
+// @route   PUT /api/users/profile
+// @access  Private
 const updateUserProfile = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id);
-  if (user) {
-    user.name = req.body.name || user.name;
-    user.email = req.body.email || user.email;
+  console.log("Update user profile called");
 
-    if (req.body.password) {
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(req.body.password, salt);
-      user.password = hashedPassword;
-    }
+  // Ensure req.user exists
+  if (!req.user || !req.user._id) {
+    return res.status(401).json({ message: "Not authorized" });
+  }
 
+  let user;
+  try {
+    user = await User.findById(req.user._id);
+  } catch (err) {
+    console.error("Error fetching user from DB:", err);
+    return res.status(500).json({ message: "Database error" });
+  }
+
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  // Update user fields
+  user.name = req.body.name || user.name;
+  user.email = req.body.email || user.email;
+
+  if (req.body.password) {
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(req.body.password, salt);
+  }
+
+  try {
     const updatedUser = await user.save();
-    
-    res.status(200).json({
+
+    // Only set headers / send response after all DB operations succeed
+    generateToken(res, updatedUser._id); // if you need JWT cookie
+
+    return res.status(200).json({
       id: updatedUser._id,
       name: updatedUser.name,
       email: updatedUser.email,
       isAdmin: updatedUser.isAdmin,
     });
-  } else {
-    res.status(404);
-    throw new Error("User not found");
+  } catch (err) {
+    console.error("Error saving updated user:", err);
+    if (!res.headersSent) {
+      return res.status(500).json({ message: "Failed to update user" });
+    }
   }
 });
+
+
 
 // @desc    Get all users
 // @route   GET /api/users
