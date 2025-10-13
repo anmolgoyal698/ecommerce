@@ -1,5 +1,6 @@
 import asyncHandler from "../middleware/asyncHandler.js";
 import User from "../models/userModel.js";
+import jwt from "jsonwebtoken";
 
 // @desc    Log in user and get token
 // @route   POST /api/users/login
@@ -7,13 +8,24 @@ import User from "../models/userModel.js";
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
-  if (user) {
+
+  if (user &&  await user.matchPassword(password)) {
+    const token = jwt.sign({userId: user._id}, process.env.JWT_SECRET, {expires: '1d'});
+
+    // Set JWT as http only cookie
+    res.cookie('jwt', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV !== 'production',
+      sameSite: 'strict',
+      maxAge: 1 * 24 * 60 * 60 * 1000 // 1d
+    });
+
     res.json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        isAdmin: user.isAdmin
-    })
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      isAdmin: user.isAdmin,
+    });
   } else {
     res.status(401);
     throw new Error("Invalid email or password");
@@ -32,7 +44,12 @@ const registerUser = asyncHandler(async (req, res) => {
 // @route   POST /api/users/logout
 // @acess.  Private
 const logoutUser = asyncHandler(async (req, res) => {
-  res.send("Logout user");
+  res.cookie('jwt', '', {
+    httpOnly: true,
+    expires: new Date(0)
+  });
+
+  res.status(200).json({message: "Logged out successfully"});
 });
 
 // @desc    Get user's profile
@@ -45,7 +62,7 @@ const getUserProfile = asyncHandler(async (req, res) => {
 // @desc    Get user's profile
 // @route   PUT /api/users/profile
 // @acess.  Private
-const updateuUserProfile = asyncHandler(async (req, res) => {
+const updateUserProfile = asyncHandler(async (req, res) => {
   res.send("Update user profile");
 });
 
@@ -82,7 +99,7 @@ export {
   registerUser,
   logoutUser,
   getUserProfile,
-  updateuUserProfile,
+  updateUserProfile,
   getUsers,
   getUserById,
   updateUser,
