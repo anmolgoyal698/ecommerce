@@ -1,6 +1,7 @@
+import bcrypt from "bcrypt";
 import asyncHandler from "../middleware/asyncHandler.js";
 import User from "../models/userModel.js";
-import jwt from "jsonwebtoken";
+import generateToken from "../utils/generateToken.js";
 
 // @desc    Log in user and get token
 // @route   POST /api/users/login
@@ -9,16 +10,8 @@ const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
 
-  if (user &&  await user.matchPassword(password)) {
-    const token = jwt.sign({userId: user._id}, process.env.JWT_SECRET, {expires: '1d'});
-
-    // Set JWT as http only cookie
-    res.cookie('jwt', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV !== 'production',
-      sameSite: 'strict',
-      maxAge: 1 * 24 * 60 * 60 * 1000 // 1d
-    });
+  if (user && (await user.matchPassword(password))) {
+    generateToken(res, user._id);
 
     res.json({
       _id: user._id,
@@ -37,33 +30,94 @@ const loginUser = asyncHandler(async (req, res) => {
 // @route   POST /api/users
 // @acess.  Public
 const registerUser = asyncHandler(async (req, res) => {
-  res.send("Register user");
+  const { name, email, password } = req.body;
+
+  const userExists = await User.findOne({ email });
+
+  if (userExists) {
+    res.status(401);
+    throw new Error("User already exists !");
+  } else {
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const user = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+    });
+
+    if (user) {
+      generateToken(res, user._id);
+      res.status(201).json({
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        isAdmin: user.isAdmin,
+      });
+    } else {
+      res.status(400);
+      throw new Error("Invalid user data");
+    }
+  }
 });
 
 // @desc    Log out user / clear cookie
 // @route   POST /api/users/logout
 // @acess.  Private
 const logoutUser = asyncHandler(async (req, res) => {
-  res.cookie('jwt', '', {
+  res.cookie("jwt", "", {
     httpOnly: true,
-    expires: new Date(0)
+    expires: new Date(0),
   });
 
-  res.status(200).json({message: "Logged out successfully"});
+  res.status(200).json({ message: "Logged out successfully" });
 });
 
 // @desc    Get user's profile
 // @route   GET /api/users/profile
 // @acess.  Private
 const getUserProfile = asyncHandler(async (req, res) => {
-  res.send("Get user profile");
+  if (req.user) {
+    res.status(200).json({
+      id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      isAdmin: req.user.isAdmin,
+    });
+  } else {
+    res.status(404);
+    throw new Error("User not found");
+  }
 });
 
 // @desc    Get user's profile
 // @route   PUT /api/users/profile
 // @acess.  Private
 const updateUserProfile = asyncHandler(async (req, res) => {
-  res.send("Update user profile");
+  const user = await User.findById(req.user._id);
+  if (user) {
+    user.name = req.body.name || user.name;
+    user.email = req.body.email || user.email;
+
+    if (req.body.password) {
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(req.body.password, salt);
+      user.password = hashedPassword;
+    }
+
+    const updatedUser = await user.save();
+    
+    res.status(200).json({
+      id: updatedUser._id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      isAdmin: updatedUser.isAdmin,
+    });
+  } else {
+    res.status(404);
+    throw new Error("User not found");
+  }
 });
 
 // @desc    Get all users
