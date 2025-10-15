@@ -83,7 +83,7 @@ const CartScreen = () => {
                 <h3>Subtotal ({totalItems}) items</h3>${cart.itemsPrice}
               </ListGroup.Item>
               <ListGroup.Item>
-                <Button type="button" className="btn-block">
+                <Button type="button" className="btn-block" onClick={() => navigate('/login?redirect=shipping')}>
                   Proceed to checkout
                 </Button>
               </ListGroup.Item>
